@@ -4,7 +4,15 @@
  * Tests / offline demos: InMemoryFabricGateway.
  */
 
-import type { LedgerTokenId, NidhiAccountId, OfflineReceipt, SignedTransfer } from '../types';
+import type {
+  AddressCommitments,
+  GeoSource,
+  LedgerTokenId,
+  NidhiAccountId,
+  OfflineReceipt,
+  SignedTransfer,
+} from '../types';
+import { addAmount, subAmount } from '../pay/amount';
 import { verifyOfflineReceipt, verifySignedTransfer } from '../pay/transfer';
 
 export interface FabricSubmitResult {
@@ -27,6 +35,14 @@ export interface FabricTxRecord {
   tokenId: LedgerTokenId;
   timestamp: number;
   nonce: string;
+  particulars?: string;
+  chequeOrRefNo?: string;
+  initials?: string;
+  balanceBefore?: string;
+  balanceAfter?: string;
+  addressCommitments?: AddressCommitments;
+  geoSource?: GeoSource;
+  geoCommitment?: string;
 }
 
 export interface FabricGateway {
@@ -42,14 +58,8 @@ function balKey(accountId: NidhiAccountId, tokenId: LedgerTokenId): BalKey {
   return `${accountId}:${tokenId}`;
 }
 
-function addAmount(a: string, b: string): string {
-  return (Number(a) + Number(b)).toFixed(6).replace(/\.?0+$/, '');
-}
-
-function subAmount(a: string, b: string): string {
-  const n = Number(a) - Number(b);
-  if (n < -1e-9) throw new Error('Insufficient balance');
-  return n.toFixed(6).replace(/\.?0+$/, '');
+function isOfflineReceipt(tx: SignedTransfer): tx is OfflineReceipt {
+  return (tx as OfflineReceipt).kind === 'offline_receipt';
 }
 
 /**
@@ -104,6 +114,18 @@ export class InMemoryFabricGateway implements FabricGateway {
         tokenId: tx.tokenId,
         timestamp: tx.timestamp,
         nonce: tx.nonce,
+        ...(isOfflineReceipt(tx)
+          ? {
+              particulars: tx.particulars,
+              chequeOrRefNo: tx.chequeOrRefNo,
+              initials: tx.initials,
+              balanceBefore: tx.balanceBefore,
+              balanceAfter: tx.balanceAfter,
+              addressCommitments: tx.addressCommitments,
+              geoSource: tx.geoSource,
+              geoCommitment: tx.geoCommitment,
+            }
+          : {}),
       });
       return { txId, status: 'committed' };
     } catch (e) {
@@ -177,5 +199,21 @@ export class HttpFabricGateway implements FabricGateway {
     );
     if (!res.ok) throw new Error(`transactions http_${res.status}`);
     return (await res.json()) as FabricTxRecord[];
+  }
+
+  async mint(
+    accountId: NidhiAccountId,
+    tokenId: LedgerTokenId,
+    amount: string
+  ): Promise<FabricSubmitResult> {
+    const res = await this.fetchFn(this.url('/fabric/mint'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountId, tokenId, amount }),
+    });
+    if (!res.ok) {
+      return { txId: '', status: 'rejected', reason: `http_${res.status}` };
+    }
+    return (await res.json()) as FabricSubmitResult;
   }
 }

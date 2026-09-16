@@ -14,6 +14,10 @@ export function fromHex(hex: string): Uint8Array {
 }
 
 /** Derive a short display account id from public key (8 chars, Crockford-ish). */
+export function accountIdFromPublicKeyHex(publicKeyHex: string): string {
+  return accountIdFromPublicKey(fromHex(publicKeyHex));
+}
+
 export function accountIdFromPublicKey(publicKey: Uint8Array): string {
   const digest = sha256(publicKey);
   let n = 0n;

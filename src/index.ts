@@ -3,26 +3,36 @@
  *
  * - Device Ed25519 keys + offline signed receipts (Return QR)
  * - Encrypted cloud vault helpers (user GDrive/iCloud `annadataai`)
- * - Fabric gateway port (in-memory demo + HTTP BFF client)
+ * - Fabric gateway port (in-memory demo + HTTP BFF + peer chaincode adapter)
+
  * - US / India corridor ramp quotes (annadata.ai dual treasury)
  */
 
 export type {
+  AddressCommitments,
+  AddressStatement,
   Corridor,
   FiatCurrency,
   FxQuote,
+  GeoPoint,
+  GeoSource,
+  GeoStatement,
   IdentityCert,
   LedgerTokenId,
   NidhiAccountId,
   NidhiKeyPair,
   OfflineReceipt,
+  PartyRole,
+  PostalAddress,
   RampIntent,
   SignedTransfer,
   TransferIntent,
+  VendorPayQr,
 } from './types';
 
 export {
   accountIdFromPublicKey,
+  accountIdFromPublicKeyHex,
   canonicalJson,
   createEd25519Wallet,
   fromHex,
@@ -49,7 +59,9 @@ export {
   createOfflineReceipt,
   createTransferIntent,
   decodeReturnQrPayload,
+  decodeVendorPayQr,
   encodeReturnQrPayload,
+  encodeVendorPayQr,
   signTransfer,
   verifyOfflineReceipt,
   verifySignedTransfer,
@@ -80,6 +92,9 @@ export type {
   FabricTxRecord,
 } from './fabric/gateway';
 
+export { PeerFabricGateway } from './fabric/peerGateway';
+export type { FabricContract, FabricRampGateway } from './fabric/peerGateway';
+
 export {
   TREASURY_LABELS,
   buildOffRampIntent,
@@ -92,6 +107,30 @@ export {
 
 export { MemoryOfflineReceiptStore } from './local/receiptStore';
 export type { OfflineReceiptStore } from './local/receiptStore';
+
+export { addressCommitment, commitmentHex, geoCommitment } from './identity/commitments';
+
+export { certSigningBody, issueAttestedCert, verifyIdentityCert } from './identity/cert';
+
+export {
+  createAddressStatement,
+  createGeoStatement,
+  verifyAddressStatement,
+  verifyGeoStatement,
+} from './identity/statements';
+
+export { HttpPartyDirectory, MemoryPartyDirectory } from './identity/directory';
+export type { PartyDirectory } from './identity/directory';
+
+export {
+  PASSBOOK_ABBREVIATIONS,
+  PASSBOOK_COLUMNS,
+  buildPassbook,
+  buildPassbookFromGateway,
+  formatPassbookAmount,
+  formatPassbookDate,
+} from './passbook/passbook';
+export type { Passbook, PassbookPage, PassbookRow, PassbookRowKind } from './passbook/passbook';
 
 export { buildVerifyBundle, verifyBundleLocally } from './verify/bundle';
 export type { VerifyBundle } from './verify/bundle';
