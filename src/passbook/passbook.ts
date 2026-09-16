@@ -129,7 +129,9 @@ function entryFromTx(
   const initials = tx.initials;
 
   if (debit) {
-    const next = tx.balanceAfter ?? subAmountUnchecked(running, tx.amount);
+    // Always replay from running balance so a stale receipt snapshot cannot
+    // desync the passbook from the ordered ledger history.
+    const next = subAmountUnchecked(running, tx.amount);
     return {
       running: next,
       row: ledgerRow('entry', tx.timestamp, particulars, ref, tx.amount, '', next, initials),

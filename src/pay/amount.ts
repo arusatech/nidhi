@@ -6,6 +6,11 @@ export function isPositiveAmount(amount: string): boolean {
   return AMOUNT_RE.test(amount) && Number(amount) > 0;
 }
 
+/** Non-negative decimal string (balances may be zero). */
+export function isNonNegativeAmount(amount: string): boolean {
+  return AMOUNT_RE.test(amount) && Number.isFinite(Number(amount)) && Number(amount) >= 0;
+}
+
 export function normalizeAmount(amount: string | number): string {
   return Number(amount).toFixed(6).replace(/\.?0+$/, '');
 }

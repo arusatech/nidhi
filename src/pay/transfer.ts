@@ -9,7 +9,13 @@ import {
   verifyMessage,
 } from '../crypto/keys';
 import { geoCommitment } from '../identity/commitments';
-import { compareAmount, isPositiveAmount, subAmount } from './amount';
+import {
+  compareAmount,
+  isNonNegativeAmount,
+  isPositiveAmount,
+  normalizeAmount,
+  subAmount,
+} from './amount';
 import type {
   AddressCommitments,
   GeoPoint,
@@ -22,6 +28,18 @@ import type {
   TransferIntent,
   VendorPayQr,
 } from '../types';
+
+export type OfflineReceiptVerifyFailure =
+  | 'not_receipt'
+  | 'signer_mismatch'
+  | 'invalid_amount'
+  | 'insufficient_funds'
+  | 'balance_mismatch'
+  | 'invalid_signature';
+
+export type OfflineReceiptVerifyResult =
+  | { ok: true }
+  | { ok: false; reason: OfflineReceiptVerifyFailure };
 
 function newNonce(): string {
   return toHex(randomBytes(16));
@@ -168,19 +186,36 @@ export function createOfflineReceipt(
   return signReceiptBody(wallet, unsigned);
 }
 
-export function verifyOfflineReceipt(receipt: OfflineReceipt): boolean {
-  if (receipt.kind !== 'offline_receipt') return false;
-  if (accountIdFromPublicKeyHex(receipt.publicKeyHex) !== receipt.from) return false;
-  try {
-    if (subAmount(receipt.balanceBefore, receipt.amount) !== receipt.balanceAfter) return false;
-  } catch {
-    return false;
+export function verifyOfflineReceiptDetailed(receipt: OfflineReceipt): OfflineReceiptVerifyResult {
+  if (receipt.kind !== 'offline_receipt') return { ok: false, reason: 'not_receipt' };
+  if (accountIdFromPublicKeyHex(receipt.publicKeyHex) !== receipt.from) {
+    return { ok: false, reason: 'signer_mismatch' };
   }
-  return verifyMessage(
+  if (
+    !isPositiveAmount(receipt.amount) ||
+    !isNonNegativeAmount(receipt.balanceBefore) ||
+    !isNonNegativeAmount(receipt.balanceAfter)
+  ) {
+    return { ok: false, reason: 'invalid_amount' };
+  }
+  if (compareAmount(receipt.balanceBefore, receipt.amount) < 0) {
+    return { ok: false, reason: 'insufficient_funds' };
+  }
+  const expectedAfter = normalizeAmount(Number(receipt.balanceBefore) - Number(receipt.amount));
+  if (expectedAfter !== receipt.balanceAfter) {
+    return { ok: false, reason: 'balance_mismatch' };
+  }
+  const sigOk = verifyMessage(
     fromHex(receipt.publicKeyHex),
     utf8(canonicalJson(receiptSigningBody(receipt))),
     fromHex(receipt.signatureHex)
   );
+  if (!sigOk) return { ok: false, reason: 'invalid_signature' };
+  return { ok: true };
+}
+
+export function verifyOfflineReceipt(receipt: OfflineReceipt): boolean {
+  return verifyOfflineReceiptDetailed(receipt).ok;
 }
 
 /**
@@ -196,8 +231,13 @@ export function decodeReturnQrPayload(raw: string): OfflineReceipt {
   if (parsed?.kind !== 'offline_receipt') {
     throw new Error('Not an offline Nidhi receipt QR');
   }
-  if (!verifyOfflineReceipt(parsed)) {
-    throw new Error('Invalid offline receipt signature');
+  const detail = verifyOfflineReceiptDetailed(parsed);
+  if (!detail.ok) {
+    throw new Error(
+      detail.reason === 'invalid_signature' || detail.reason === 'signer_mismatch'
+        ? 'Invalid offline receipt signature'
+        : `Invalid offline receipt (${detail.reason})`
+    );
   }
   return parsed;
 }

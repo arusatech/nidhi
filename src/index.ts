@@ -64,8 +64,10 @@ export {
   encodeVendorPayQr,
   signTransfer,
   verifyOfflineReceipt,
+  verifyOfflineReceiptDetailed,
   verifySignedTransfer,
 } from './pay/transfer';
+export type { OfflineReceiptVerifyFailure, OfflineReceiptVerifyResult } from './pay/transfer';
 
 export {
   decryptVaultPayload,

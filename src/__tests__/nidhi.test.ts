@@ -28,6 +28,7 @@ import {
   verifyGeoStatement,
   verifyIdentityCert,
   verifyOfflineReceipt,
+  verifyOfflineReceiptDetailed,
   verifySignedTransfer,
   writeEncryptedVaultToCloud,
   readEncryptedVaultFromCloud,
@@ -198,7 +199,23 @@ describe('offline receipt passbook balances', () => {
       addressCommitments: { buyer: 'aa', vendor: 'bb' },
     });
     expect(verifyOfflineReceipt({ ...receipt, balanceAfter: '9999' })).toBe(false);
+    expect(verifyOfflineReceiptDetailed({ ...receipt, balanceAfter: '9999' })).toEqual({
+      ok: false,
+      reason: 'balance_mismatch',
+    });
+    expect(verifyOfflineReceiptDetailed({ ...receipt, balanceBefore: '10' })).toEqual({
+      ok: false,
+      reason: 'insufficient_funds',
+    });
+    expect(verifyOfflineReceiptDetailed({ ...receipt, amount: 'not-a-number' })).toEqual({
+      ok: false,
+      reason: 'invalid_amount',
+    });
     expect(verifyOfflineReceipt({ ...receipt, particulars: 'forged' })).toBe(false);
+    expect(verifyOfflineReceiptDetailed({ ...receipt, particulars: 'forged' })).toEqual({
+      ok: false,
+      reason: 'invalid_signature',
+    });
     expect(
       verifyOfflineReceipt({
         ...receipt,
@@ -372,6 +389,40 @@ describe('passbook view', () => {
     expect(book.pages[0]?.carriedForward).toBe(book.pages[1]?.broughtForward);
     expect(book.pages[2]?.rows.some((r) => r.kind === 'cf')).toBe(false);
     expect(book.closingBalance).toBe('70');
+  });
+
+  it('replays continuous running balance and ignores stale balanceAfter snapshots', () => {
+    const accountId = 'BUYER001';
+    const tokenId = 'NIDHI-USD' as const;
+    // Two debits that both claim balanceBefore 100 (stale concurrent snapshots).
+    const transactions = [
+      {
+        txId: 't1',
+        from: accountId,
+        to: 'VENDOR01',
+        amount: '10',
+        tokenId,
+        timestamp: 1,
+        nonce: 'n1',
+        balanceBefore: '100',
+        balanceAfter: '90',
+      },
+      {
+        txId: 't2',
+        from: accountId,
+        to: 'VENDOR02',
+        amount: '10',
+        tokenId,
+        timestamp: 2,
+        nonce: 'n2',
+        balanceBefore: '100',
+        balanceAfter: '90', // stale — should not jump passbook back to 90
+      },
+    ];
+    const book = buildPassbook({ accountId, tokenId, transactions, openingBalance: '100' });
+    const entries = book.pages[0]?.rows.filter((r) => r.kind === 'entry') ?? [];
+    expect(entries.map((r) => r.balance)).toEqual(['90', '80']);
+    expect(book.closingBalance).toBe('80');
   });
 });
 
